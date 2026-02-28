@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Prazos Jurídicos - RMR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+
+    <div class="max-w-xl mx-auto my-10 p-8 bg-white shadow-2xl rounded-2xl border-t-8 border-blue-900">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-extrabold text-blue-900">Calculadora de Prazos</h1>
+            <p class="text-blue-600 font-medium">Justiça Estadual - Pernambuco</p>
+        </header>
+
+        <div class="space-y-5">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Sua Cidade (Região Metropolitana):</label>
+                <select id="cidade" class="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 outline-none transition">
+                    <option value="geral">Outras Cidades (Apenas Estaduais)</option>
+                    <option value="recife">Recife</option>
+                    <option value="jaboatao">Jaboatão dos Guararapes</option>
+                    <option value="olinda">Olinda</option>
+                    <option value="paulista">Paulista</option>
+                    <option value="camaragibe">Camaragibe</option>
+                    <option value="cabo">Cabo de Santo Agostinho</option>
+                    <option value="ipojuca">Ipojuca</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Dia que recebeu a intimação/citação:</label>
+                <input type="date" id="dataInicio" class="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Tipo de Processo:</label>
+                <select id="tipoPrazo" class="w-full p-3 border-2 border-gray-200 rounded-lg">
+                    <option value="civil">Cível, Família ou Infância (Dias Úteis)</option>
+                    <option value="criminal">Criminal (Dias Corridos)</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Prazo dado pelo Juiz (Ex: 15 dias):</label>
+                <input type="number" id="qtdDias" value="15" class="w-full p-3 border-2 border-gray-200 rounded-lg">
+            </div>
+
+            <button onclick="calcularPrazo()" class="w-full bg-blue-900 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg transform active:scale-95 transition">
+                CALCULAR DATA DE ENTREGA
+            </button>
+        </div>
+
+        <div id="resultado" class="mt-8 p-6 bg-yellow-50 border-2 border-yellow-200 rounded-xl hidden">
+            <h2 class="font-bold text-blue-900 uppercase text-xs tracking-widest mb-2">Data Final Estimada:</h2>
+            <p id="dataFinalTexto" class="text-2xl font-black text-gray-900"></p>
+            <p class="text-sm text-gray-500 mt-4 leading-relaxed">
+                ⚠️ <strong>Atenção:</strong> Se o prazo terminar num feriado ou fim de semana, ele passa para o próximo dia útil. Não deixe para a última hora!
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const feriadosEstaduais = ["2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-06", "2026-04-03", "2026-04-21", "2026-05-01", "2026-06-04", "2026-06-24", "2026-09-07", "2026-10-12", "2026-10-28", "2026-11-02", "2026-11-15", "2026-12-08", "2026-12-25"];
+
+        const feriadosMunicipais = {
+            recife: ["2026-07-16"], // N. Sra do Carmo
+            jaboatao: ["2026-01-15", "2026-05-04"], // Santo Amaro e Emancipação
+            olinda: ["2026-08-06", "2026-11-10"], // S. Salvador do Mundo e Emancipação
+            paulista: ["2026-09-04", "2026-12-15"], // Emancipação e Padroeira
+            cabo: ["2026-07-09"], // Emancipação
+            ipojuca: ["2026-03-30"] // Emancipação
+        };
+
+        function eDiaUtil(data, cidade) {
+            const diaSemana = data.getUTCDay();
+            const stringData = data.toISOString().split('T')[0];
+            const municipais = feriadosMunicipais[cidade] || [];
+            return diaSemana !== 0 && diaSemana !== 6 && !feriadosEstaduais.includes(stringData) && !municipais.includes(stringData);
+        }
+
+        function calcularPrazo() {
+            const dataInput = document.getElementById('dataInicio').value;
+            const cidade = document.getElementById('cidade').value;
+            const tipo = document.getElementById('tipoPrazo').value;
+            const diasParaSomar = parseInt(document.getElementById('qtdDias').value);
+
+            if (!dataInput) { alert("Por favor, escolha o dia que você recebeu o documento."); return; }
+
+            let dataAtual = new Date(dataInput);
+            let diasContados = 0;
+
+            // Início da contagem: Primeiro dia útil após o recebimento
+            dataAtual.setUTCDate(dataAtual.getUTCDate() + 1);
+            while (!eDiaUtil(dataAtual, cidade)) {
+                dataAtual.setUTCDate(dataAtual.getUTCDate() + 1);
+            }
+
+            if (tipo === 'civil') {
+                while (diasContados < (diasParaSomar - 1)) {
+                    dataAtual.setUTCDate(dataAtual.getUTCDate() + 1);
+                    if (eDiaUtil(dataAtual, cidade)) {
+                        diasContados++;
+                    }
+                }
+            } else {
+                dataAtual.setUTCDate(dataAtual.getUTCDate() + diasParaSomar - 1);
+                while (!eDiaUtil(dataAtual, cidade)) {
+                    dataAtual.setUTCDate(dataAtual.getUTCDate() + 1);
+                }
+            }
+
+            const opcaoData = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('dataFinalTexto').innerText = dataAtual.toLocaleDateString('pt-BR', { ...opcaoData, timeZone: 'UTC' });
+            document.getElementById('resultado').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
