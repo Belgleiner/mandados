@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Central de Mandados - TJPE</title>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
@@ -9,637 +10,174 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Arial; background: #eef2f7; padding: 20px; color: #333; }
-        h2 { color: #1e3a8a; border-bottom: 2px solid #1e40af; padding-bottom: 10px; }
-        .controls { background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        button { padding: 10px 15px; cursor: pointer; background: #1e40af; color: white; border: none; border-radius: 6px; font-weight: bold; transition: 0.3s; }
-        button:hover { background: #1e3a8a; }
-        .card { background: white; padding: 15px; margin-top: 10px; border-radius: 8px; box-shadow: 0 3px 8px rgba(0,0,0,0.1); position: relative; }
-        .vencido { border-left: 8px solid #b91c1c; }
-        .proximo { border-left: 8px solid #f59e0b; }
-        .regular { border-left: 8px solid #15803d; }
-        input { width: calc(100% - 20px); margin: 5px 0; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
-        .dashboard { background: #1e3a8a; color: white; padding: 15px; margin-top: 20px; border-radius: 8px; display: flex; justify-content: space-around; }
-        #loading { display: none; color: #1e40af; font-weight: bold; margin: 10px 0; }
+        :root {
+            --primary: #1e3a8a;
+            --success: #15803d;
+            --warning: #f59e0b;
+            --danger: #b91c1c;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f4f8; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        h2 { color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+        
+        .upload-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; color: white; transition: 0.3s; margin-right: 10px; }
+        .btn-process { background: var(--primary); }
+        .btn-excel { background: var(--success); }
+        
+        .dashboard { display: flex; gap: 15px; margin-bottom: 20px; }
+        .stat-card { flex: 1; background: white; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        
+        .card { background: white; padding: 20px; margin-top: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: relative; }
+        .card.vencido { border-left: 10px solid var(--danger); }
+        .card.proximo { border-left: 10px solid var(--warning); }
+        .card.regular { border-left: 10px solid var(--success); }
+        
+        label { display: block; font-weight: bold; margin-top: 10px; font-size: 0.9em; color: #555; }
+        input { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .loading { font-weight: bold; color: var(--primary); display: none; }
     </style>
 </head>
-
 <body>
 
-    <h2>🏛️ Painel de Triagem - Central de Mandados (TJPE)</h2>
+<div class="container">
+    <h2>🏛️ Central de Mandados - Painel de Controle</h2>
 
-    <div class="controls">
-        <label><b>Carregar Print do Sistema:</b></label><br><br>
-        <input type="file" id="imagemInput" accept="image/*">
-        <br><br>
-        <button onclick="processarImagem()">🚀 Processar Imagem (OCR)</button>
-        <button onclick="exportarExcel()" style="background: #15803d;">📥 Exportar Excel</button>
-        <div id="loading">⌛ Processando texto da imagem, aguarde...</div>
+    <div class="upload-section">
+        <label>Selecione o Print do Sistema:</label><br>
+        <input type="file" id="imagemInput" accept="image/*"><br><br>
+        <button class="btn-process" onclick="processarImagem()">🚀 Processar Imagem (OCR)</button>
+        <button class="btn-excel" onclick="exportarExcel()">📥 Exportar Excel</button>
+        <p id="loadingStatus" class="loading">⌛ Analisando imagem... Aguarde.</p>
     </div>
 
     <div id="dashboard" class="dashboard">
         </div>
 
     <div id="resultado"></div>
+</div>
 
-    <audio id="alertaSom">
-        <source src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" type="audio/mpeg">
-    </audio>
-
-<script>
-let bancoMandados = [];
-
-// Carregar dados ao iniciar
-window.onload = carregarLocal;
-
-function salvarLocal(){
-    localStorage.setItem("mandadosTJPE", JSON.stringify(bancoMandados));
-}
-
-function carregarLocal(){
-    const dados = localStorage.getItem("mandadosTJPE");
-    if(dados){
-        bancoMandados = JSON.parse(dados);
-        renderizar();
-    }
-}
-
-function identificarTipo(txt){
-    const t = txt.toUpperCase();
-    if(t.includes("PROTETIVA") || t.includes("VIOLÊNCIA DOMÉSTICA")) return "MEDIDA PROTETIVA";
-    if(t.includes("URGENTE") || t.includes("LIMINAR")) return "URGENTE";
-    return "ORDINÁRIO";
-}
-
-function calcularPrazo(tipo, dataDistStr){
-    // Prazos conforme normas internas (exemplo)
-    let dias = tipo === "MEDIDA PROTETIVA" ? 2 : tipo === "URGENTE" ? 5 : 20;
-    let partes = dataDistStr.split("/");
-    let data = new Date(partes[2], partes[1]-1, partes[0]);
-    data.setDate(data.getDate() + dias);
-    return data;
-}
-
-function classificarStatus(dataFinal){
-    let hoje = new Date();
-    hoje.setHours(0,0,0,0);
-    let diff = Math.ceil((dataFinal - hoje) / (1000 * 60 * 60 * 24));
-    
-    if(diff < 0) return "vencido";
-    if(diff <= 2) return "proximo";
-    return "regular";
-}
-
-async function processarImagem(){
-    const file = document.getElementById("imagemInput").files[0];
-    if(!file) return alert("Selecione uma imagem primeiro.");
-
-    document.getElementById("loading").style.display = "block";
-
-    try {
-        const { data: { text } } = await Tesseract.recognize(file, 'por');
-        processarTextoOCR(text);
-    } catch (e) {
-        alert("Erro no processamento da imagem.");
-    } finally {
-        document.getElementById("loading").style.display = "none";
-    }
-}
-
-function processarTextoOCR(texto){
-    // Expressão regular para capturar número de processo padrão CNJ
-    const regexProc = /\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g;
-    const processosEncontrados = texto.match(regexProc) || [];
-
-    processosEncontrados.forEach(proc => {
-        // Evita duplicatas
-        if (bancoMandados.find(m => m.processo === proc)) return;
-
-        let bloco = texto.split(proc)[1] || "";
-        let dataDist = (bloco.match(/\d{2}\/\d{2}\/\d{4}/) || [new Date().toLocaleDateString('pt-BR')])[0];
-        
-        let tipo = identificarTipo(bloco);
-        let prazoObj = calcularPrazo(tipo, dataDist);
-        
-        if(tipo === "MEDIDA PROTETIVA") document.getElementById("alertaSom").play();
-
-        bancoMandados.push({
-            processo: proc,
-            nome: "Clique para editar",
-            endereco: "Clique para editar",
-            tipo: tipo,
-            distribuicao: dataDist,
-            prazo: prazoObj.toLocaleDateString('pt-BR'),
-            status: classificarStatus(prazoObj)
-        });
-    });
-
-    salvarLocal();
-    renderizar();
-}
-
-function editar(index, campo, valor){
-    bancoMandados[index][campo] = valor;
-    // Se mudar a data ou tipo, opcionalmente poderia recalcular o prazo aqui.
-    salvarLocal();
-    atualizarDashboard();
-}
-
-function renderizar(){
-    const div = document.getElementById("resultado");
-    div.innerHTML = "";
-
-    bancoMandados.forEach((m, index) => {
-        div.innerHTML += `
-        <div class="card ${m.status}">
-            <b>Processo:</b> <input value="${m.processo}" onchange="editar(${index},'processo',this.value)">
-            <b>Parte/Destinatário:</b> <input value="${m.nome}" onchange="editar(${index},'nome',this.value)">
-            <b>Endereço:</b> <input value="${m.endereco}" onchange="editar(${index},'endereco',this.value)">
-            <div style="display:flex; gap:10px; margin-top:5px;">
-                <span><b>Tipo:</b> ${m.tipo}</span> | 
-                <span><b>Prazo Final:</b> ${m.prazo}</span> |
-                <span><b>Status:</b> ${m.status.toUpperCase()}</span>
-            </div>
-            <button onclick="gerarCertidaoIndividual(${index})" style="margin-top:10px; background:#444;">📄 Gerar Minuta de Certidão</button>
-            <button onclick="remover(${index})" style="background:#b91c1c;">🗑️</button>
-        </div>`;
-    });
-    atualizarDashboard();
-}
-
-function remover(index){
-    if(confirm("Deseja excluir este registro?")){
-        bancoMandados.splice(index, 1);
-        salvarLocal();
-        renderizar();
-    }
-}
-
-function atualizarDashboard(){
-    const total = bancoMandados.length;
-    const vencidos = bancoMandados.filter(m => m.status === "vencido").length;
-    const urgentes = bancoMandados.filter(m => m.tipo !== "ORDINÁRIO").length;
-
-    document.getElementById("dashboard").innerHTML = `
-        <div><b>TOTAL DE MANDADOS:</b> ${total}</div>
-        <div><b>URGENTES/PROTETIVAS:</b> ${urgentes}</div>
-        <div style="color:${vencidos > 0 ? '#ff9b9b' : 'white'}"><b>VENCIDOS:</b> ${vencidos}</div>
-    `;
-}
-
-function gerarCertidaoIndividual(index){
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    const m = bancoMandados[index];
-
-    doc.setFontSize(14);
-    doc.text("PODER JUDICIÁRIO - ESTADO DE PERNAMBUCO", 10, 20);
-    doc.setFontSize(12);
-    doc.text("CERTIDÃO DE DILIGÊNCIA", 10, 30);
-    
-    let texto = `CERTIFICO, em virtude da fé pública de meu cargo, que em cumprimento ao mandado referente ao processo nº ${m.processo}, dirigi-me ao endereço ${m.endereco} para proceder à citação/intimação de ${m.nome}. No local, certifiquei que... [CONTINUAR TEXTO]`;
-    
-    let linhas = doc.splitTextToSize(texto, 180);
-    doc.text(linhas, 10, 50);
-    doc.text("O referido é verdade e dou fé.", 10, 100);
-    doc.text("Oficial(a) de Justiça", 10, 120);
-
-    doc.save(`Certidao_${m.processo}.pdf`);
-}
-
-function exportarExcel(){
-    if(bancoMandados.length === 0) return alert("Não há dados para exportar.");
-    const ws = XLSX.utils.json_to_sheet(bancoMandados);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Mandados");
-    XLSX.writeFile(wb, "Controle_Oficial_Justica_TJPE.xlsx");
-}
-</script>
-</body>
-</html><audio id="alertaSom">
-<source src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" type="audio/mpeg">
+<audio id="alertaSom">
+    <source src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" type="audio/mpeg">
 </audio>
 
 <script>
+    let bancoMandados = [];
 
-let bancoMandados = [];
-
-function salvarLocal(){
-    localStorage.setItem("mandadosTJPE", JSON.stringify(bancoMandados));
-}
-
-function carregarLocal(){
-    const dados = localStorage.getItem("mandadosTJPE");
-    if(dados){
-        bancoMandados = JSON.parse(dados);
-        renderizar();
-    }
-}
-
-function identificarTipo(txt){
-    txt = txt.toUpperCase();
-    if(txt.includes("MEDIDA PROTETIVA")) return "MEDIDA PROTETIVA";
-    if(txt.includes("URGENTE")) return "URGENTE";
-    return "ORDINÁRIO";
-}
-
-function calcularPrazo(tipo, dataDist){
-    let dias = tipo==="MEDIDA PROTETIVA"?2:tipo==="URGENTE"?5:20;
-    let p = dataDist.split("/");
-    let data = new Date(p[2], p[1]-1, p[0]);
-    data.setDate(data.getDate()+dias);
-    return data;
-}
-
-function classificarPrazo(dataFinal){
-    let hoje=new Date();
-    let diff=Math.ceil((dataFinal-hoje)/(1000*60*60*24));
-    if(diff<0) return "vencido";
-    if(diff<=2) return "proximo";
-    return "regular";
-}
-
-function processarTextoOCR(texto){
-
-    const processos = texto.match(/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g) || [];
-
-    processos.forEach(proc=>{
-
-        let bloco = texto.split(proc)[1] || texto;
-        let datas = bloco.match(/\d{2}\/\d{2}\/\d{4}/g)||[];
-        let dataDist = datas[0] || new Date().toLocaleDateString('pt-BR');
-
-        let tipo = identificarTipo(bloco);
-        let prazoObj = calcularPrazo(tipo,dataDist);
-        let status = classificarPrazo(prazoObj);
-
-        if(tipo==="MEDIDA PROTETIVA"){
-            document.getElementById("alertaSom").play();
+    // Carrega dados salvos anteriormente
+    window.onload = () => {
+        const salvos = localStorage.getItem("dadosMandados");
+        if(salvos) {
+            bancoMandados = JSON.parse(salvos);
+            renderizar();
         }
-
-        bancoMandados.push({
-            processo:proc,
-            nome:"",
-            endereco:"",
-            tipo,
-            distribuicao:dataDist,
-            prazo:prazoObj.toLocaleDateString('pt-BR'),
-            status
-        });
-    });
-
-    salvarLocal();
-    renderizar();
-}
-
-function renderizar(){
-
-    const div = document.getElementById("resultado");
-    div.innerHTML="";
-
-    bancoMandados.forEach((m,index)=>{
-
-        div.innerHTML+=`
-        <div class="card ${m.status}">
-            Processo:<input value="${m.processo}" onchange="editar(${index},'processo',this.value)">
-            Nome:<input value="${m.nome}" onchange="editar(${index},'nome',this.value)">
-            Endereço:<input value="${m.endereco}" onchange="editar(${index},'endereco',this.value)">
-            Tipo:<input value="${m.tipo}" onchange="editar(${index},'tipo',this.value)">
-            Distribuição:<input value="${m.distribuicao}" onchange="editar(${index},'distribuicao',this.value)">
-            Prazo Final:<input value="${m.prazo}" readonly>
-            Status:<input value="${m.status}" readonly>
-            <button onclick="gerarCertidaoIndividual(${index})">Gerar Certidão</button>
-        </div>
-        `;
-    });
-
-    atualizarDashboard();
-}
-
-function editar(index,campo,valor){
-    bancoMandados[index][campo]=valor;
-    salvarLocal();
-}
-
-function atualizarDashboard(){
-    let total=bancoMandados.length;
-    let ord=bancoMandados.filter(m=>m.tipo==="ORDINÁRIO").length;
-    let urg=bancoMandados.filter(m=>m.tipo==="URGENTE").length;
-    let prot=bancoMandados.filter(m=>m.tipo==="MEDIDA PROTETIVA").length;
-    let venc=bancoMandados.filter(m=>m.status==="vencido").length;
-
-    document.getElementById("dashboard").innerHTML=`
-    <b>📊 Estatística Mensal</b><br>
-    Total: ${total} |
-    Ordinários: ${ord} |
-    Urgentes: ${urg} |
-    Medidas Protetivas: ${prot} |
-    Vencidos: ${venc}
-    `;
-}
-
-function gerarCertidaoIndividual(index){
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    const m = bancoMandados[index];
-
-    doc.setFontSize(12);
-    doc.text("CERTIDÃO", 10, 20);
-    doc.text(`Processo: ${m.processo}`,10,35);
-    doc.text(`Destinatário: ${m.nome}`,10,45);
-    doc.text(`Endereço: ${m.endereco}`,10,55);
-    doc.text(`Tipo: ${m.tipo}`,10,65);
-    doc.text("Certifico que procedi às diligências necessárias, nos termos do mandado expedido.",10,80);
-    doc.text("O referido é verdade. Dou fé.",10,95);
-
-    doc.save(`certidao_${m.processo}.pdf`);
-}
-
-function exportarExcel(){
-    let ws=XLSX.utils.json_to_sheet(bancoMandados);
-    let wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,"Mandados");
-    XLSX.writeFile(wb,"controle_mandados_tjpe.xlsx");
-}
-
-function processarImagem(){
-    let file=document.getElementById("imagemInput").files[0];
-    if(!file){ alert("Selecione imagem."); return; }
-
-    Tesseract.recognize(file,'por')
-    .then(({data:{text}})=>{
-        processarTextoOCR(text);
-    });
-}
-
-carregarLocal();
-
-</script>
-
-</body>
-</html>    if(diff<0) return "vencido";
-    if(diff<=2) return "proximo";
-    return "regular";
-}
-
-function processarTextoOCR(texto){
-
-    const processos = texto.match(/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g) || [];
-
-    processos.forEach(proc=>{
-
-        let bloco = texto.split(proc)[1] || texto;
-        let datas = bloco.match(/\d{2}\/\d{2}\/\d{4}/g)||[];
-        let dataDist = datas[0] || new Date().toLocaleDateString('pt-BR');
-
-        let tipo = identificarTipo(bloco);
-        let prazoObj = calcularPrazo(tipo,dataDist);
-        let status = classificarPrazo(prazoObj);
-
-        if(tipo==="MEDIDA PROTETIVA"){
-            document.getElementById("alertaSom").play();
-        }
-
-        bancoMandados.push({
-            processo:proc,
-            nome:"",
-            endereco:"",
-            tipo,
-            distribuicao:dataDist,
-            prazo:prazoObj.toLocaleDateString('pt-BR'),
-            status
-        });
-    });
-
-    salvarLocal();
-    renderizar();
-}
-
-function renderizar(){
-
-    const div = document.getElementById("resultado");
-    div.innerHTML="";
-
-    bancoMandados.forEach((m,index)=>{
-
-        div.innerHTML+=`
-        <div class="card ${m.status}">
-            Processo:<input value="${m.processo}" onchange="editar(${index},'processo',this.value)">
-            Nome:<input value="${m.nome}" onchange="editar(${index},'nome',this.value)">
-            Endereço:<input value="${m.endereco}" onchange="editar(${index},'endereco',this.value)">
-            Tipo:<input value="${m.tipo}" onchange="editar(${index},'tipo',this.value)">
-            Distribuição:<input value="${m.distribuicao}" onchange="editar(${index},'distribuicao',this.value)">
-            Prazo Final:<input value="${m.prazo}" readonly>
-            Status:<input value="${m.status}" readonly>
-            <button onclick="gerarCertidaoIndividual(${index})">Gerar Certidão</button>
-        </div>
-        `;
-    });
-
-    atualizarDashboard();
-}
-
-function editar(index,campo,valor){
-    bancoMandados[index][campo]=valor;
-    salvarLocal();
-}
-
-function atualizarDashboard(){
-    let total=bancoMandados.length;
-    let ord=bancoMandados.filter(m=>m.tipo==="ORDINÁRIO").length;
-    let urg=bancoMandados.filter(m=>m.tipo==="URGENTE").length;
-    let prot=bancoMandados.filter(m=>m.tipo==="MEDIDA PROTETIVA").length;
-    let venc=bancoMandados.filter(m=>m.status==="vencido").length;
-
-    document.getElementById("dashboard").innerHTML=`
-    <b>📊 Estatística Mensal</b><br>
-    Total: ${total} |
-    Ordinários: ${ord} |
-    Urgentes: ${urg} |
-    Medidas Protetivas: ${prot} |
-    Vencidos: ${venc}
-    `;
-}
-
-function gerarCertidaoIndividual(index){
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    const m = bancoMandados[index];
-
-    doc.setFontSize(12);
-    doc.text("CERTIDÃO", 10, 20);
-    doc.text(`Processo: ${m.processo}`,10,35);
-    doc.text(`Destinatário: ${m.nome}`,10,45);
-    doc.text(`Endereço: ${m.endereco}`,10,55);
-    doc.text(`Tipo: ${m.tipo}`,10,65);
-    doc.text("Certifico que procedi às diligências necessárias, nos termos do mandado expedido.",10,80);
-    doc.text("O referido é verdade. Dou fé.",10,95);
-
-    doc.save(`certidao_${m.processo}.pdf`);
-}
-
-function exportarExcel(){
-    let ws=XLSX.utils.json_to_sheet(bancoMandados);
-    let wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,"Mandados");
-    XLSX.writeFile(wb,"controle_mandados_tjpe.xlsx");
-}
-
-function processarImagem(){
-    let file=document.getElementById("imagemInput").files[0];
-    if(!file){ alert("Selecione imagem."); return; }
-
-    Tesseract.recognize(file,'por')
-    .then(({data:{text}})=>{
-        processarTextoOCR(text);
-    });
-}
-
-carregarLocal();
-
-</script>
-
-</body>
-</html>    if(diff<0)return "vencido";
-    if(diff<=2)return "proximo";
-    return "regular";
-}
-
-function identificarTipo(txt){
-    txt=txt.toUpperCase();
-    if(txt.includes("MEDIDA PROTETIVA"))return "MEDIDA PROTETIVA";
-    if(txt.includes("URGENTE"))return "URGENTE";
-    return "ORDINÁRIO";
-}
-
-function processarTextoOCR(texto){
-
-    const processos = texto.match(/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g) || [];
-
-    processos.forEach(proc=>{
-
-        let bloco = texto.split(proc)[1];
-
-        let datas = bloco.match(/\d{2}\/\d{2}\/\d{4}/g)||[];
-        let dataDist = datas[0]||new Date().toLocaleDateString('pt-BR');
-
-        let tipo = identificarTipo(bloco);
-
-        if(tipo==="MEDIDA PROTETIVA"){
-            document.getElementById("alertaSom").play();
-        }
-
-        let prazoObj = calcularPrazo(tipo,dataDist);
-        let status = classificarPrazo(prazoObj);
-
-        let nomeMatch = bloco.match(/NOME[:\s]+([A-Z\s]+)/);
-        let enderecoMatch = bloco.match(/ENDERE[ÇC]O[:\s]+(.+)/);
-
-        let mandado={
-            processo:proc,
-            tipo,
-            distribuicao:dataDist,
-            prazo: prazoObj.toLocaleDateString('pt-BR'),
-            status,
-            nome:nomeMatch?nomeMatch[1]:"Não identificado",
-            endereco:enderecoMatch?enderecoMatch[1]:"Não identificado"
-        };
-
-        bancoMandados.push(mandado);
-
-        document.getElementById("resultado").innerHTML += `
-        <div class="card ${status}">
-            Processo:<input value="${mandado.processo}">
-            Nome:<input value="${mandado.nome}">
-            Endereço:<input value="${mandado.endereco}">
-            Tipo:<input value="${mandado.tipo}">
-            Distribuição:<input value="${mandado.distribuicao}">
-            Prazo Final:<input value="${mandado.prazo}">
-            Status:<input value="${mandado.status}">
-        </div>
-        `;
-    });
-
-    atualizarDashboard();
-}
-
-function processarImagem(){
-    let file=document.getElementById("imagemInput").files[0];
-    if(!file)return alert("Selecione imagem");
-
-    Tesseract.recognize(file,'por').then(({data:{text}})=>{
-        processarTextoOCR(text);
-    });
-}
-
-function exportarExcel(){
-    let ws=XLSX.utils.json_to_sheet(bancoMandados);
-    let wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,"Mandados");
-    XLSX.writeFile(wb,"controle_mandados.xlsx");
-}
-
-function gerarPDF(){
-    const {jsPDF}=window.jspdf;
-    let doc=new jsPDF();
-    doc.text("Relatório Mensal - Central de Mandados",10,10);
-    let y=20;
-    bancoMandados.forEach((m,i)=>{
-        doc.text(`${i+1}. ${m.processo} | ${m.tipo} | ${m.prazo}`,10,y);
-        y+=8;
-    });
-    doc.save("relatorio_mensal.pdf");
-}
-
-function gerarCertidao(){
-    let texto="CERTIDÃO\n\nCertifico que, em cumprimento ao mandado abaixo relacionado, procedi às diligências necessárias.\n\n";
-    bancoMandados.forEach(m=>{
-        texto+=`Processo: ${m.processo} - Destinatário: ${m.nome} - Endereço: ${m.endereco}\n`;
-    });
-    alert(texto);
-}
-
-</script>
-
-</body>
-</html>        recebimento,
-        prazoFinal: dataObj.toLocaleDateString('pt-BR'),
-        status: classeStatus
     };
 
-    dadosGlobais.push(dados);
+    function salvar() {
+        localStorage.setItem("dadosMandados", JSON.stringify(bancoMandados));
+        atualizarDashboard();
+    }
 
-    return `
-    <div class="card ${classeStatus}">
-        <b>Processo:</b> ${dados.processo}<br>
-        <b>Tipo:</b> ${tipo}<br>
-        <b>Recebimento:</b> ${recebimento}<br>
-        <b>Prazo Final:</b> ${dados.prazoFinal}<br>
-        <b>Status:</b> ${classeStatus.toUpperCase()}
-    </div>
-    `;
-}
+    async function processarImagem() {
+        const file = document.getElementById("imagemInput").files[0];
+        if(!file) return alert("Selecione um arquivo!");
 
-function processarImagem(){
-    const file = document.getElementById("imagemInput").files[0];
-    if(!file){ alert("Selecione imagem"); return; }
+        document.getElementById("loadingStatus").style.display = "block";
 
-    document.getElementById("resultado").innerHTML = "Processando...";
+        try {
+            const { data: { text } } = await Tesseract.recognize(file, 'por');
+            extrairDados(text);
+        } catch (e) {
+            alert("Erro ao ler imagem.");
+        } finally {
+            document.getElementById("loadingStatus").style.display = "none";
+        }
+    }
 
-    Tesseract.recognize(file,'por').then(({data:{text}})=>{
-        document.getElementById("resultado").innerHTML = triagemAvancada(text);
-    });
-}
+    function extrairDados(texto) {
+        const regexProc = /\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g;
+        const processos = texto.match(regexProc) || [];
 
-function exportarExcel(){
-    const ws = XLSX.utils.json_to_sheet(dadosGlobais);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Mandados");
-    XLSX.writeFile(wb, "triagem_mandados_IN042023.xlsx");
-}
+        processos.forEach(num => {
+            if(bancoMandados.find(m => m.processo === num)) return;
 
+            let bloco = texto.split(num)[1] || "";
+            let tipo = "ORDINÁRIO";
+            if(texto.toUpperCase().includes("PROTETIVA")) {
+                tipo = "MEDIDA PROTETIVA";
+                document.getElementById("alertaSom").play();
+            } else if(texto.toUpperCase().includes("URGENTE")) {
+                tipo = "URGENTE";
+            }
+
+            let dataDist = (bloco.match(/\d{2}\/\d{2}\/\d{4}/) || [new Date().toLocaleDateString('pt-BR')])[0];
+            
+            bancoMandados.push({
+                processo: num,
+                nome: "",
+                endereco: "",
+                tipo: tipo,
+                distribuicao: dataDist,
+                status: "regular"
+            });
+        });
+        salvar();
+        renderizar();
+    }
+
+    function renderizar() {
+        const div = document.getElementById("resultado");
+        div.innerHTML = "";
+
+        bancoMandados.forEach((m, i) => {
+            // Lógica de prazo simples
+            let statusClasse = m.tipo === "ORDINÁRIO" ? "regular" : "proximo";
+            if(m.tipo === "MEDIDA PROTETIVA") statusClasse = "vencido";
+
+            div.innerHTML += `
+                <div class="card ${statusClasse}">
+                    <label>Processo:</label>
+                    <input type="text" value="${m.processo}" onchange="editar(${i}, 'processo', this.value)">
+                    <label>Nome do Destinatário:</label>
+                    <input type="text" value="${m.nome}" placeholder="Nome da parte..." onchange="editar(${i}, 'nome', this.value)">
+                    <label>Endereço:</label>
+                    <input type="text" value="${m.endereco}" placeholder="Rua, nº, Bairro..." onchange="editar(${i}, 'endereco', this.value)">
+                    <p><strong>Tipo:</strong> ${m.tipo} | <strong>Distr:</strong> ${m.distribuicao}</p>
+                    <button onclick="remover(${i})" style="background:#666; font-size:10px;">Excluir</button>
+                </div>
+            `;
+        });
+        atualizarDashboard();
+    }
+
+    function editar(index, campo, valor) {
+        bancoMandados[index][campo] = valor;
+        salvar();
+    }
+
+    function remover(index) {
+        if(confirm("Remover este registro?")) {
+            bancoMandados.splice(index, 1);
+            salvar();
+            renderizar();
+        }
+    }
+
+    function atualizarDashboard() {
+        const total = bancoMandados.length;
+        const urgentes = bancoMandados.filter(m => m.tipo !== "ORDINÁRIO").length;
+        document.getElementById("dashboard").innerHTML = `
+            <div class="stat-card"><b>Total</b><br>${total}</div>
+            <div class="stat-card"><b>Urgentes</b><br>${urgentes}</div>
+        `;
+    }
+
+    function exportarExcel() {
+        const ws = XLSX.utils.json_to_sheet(bancoMandados);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Mandados");
+        XLSX.writeFile(wb, "Mandados_TJPE.xlsx");
+    }
 </script>
 
 </body>
