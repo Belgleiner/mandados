@@ -2,166 +2,111 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel OFJ - Estrutura 5 Colunas</title>
-
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
+    <title>Painel OFJ - Integrado PJe</title>
     <style>
-        :root { --primary: #1e3a8a; --success: #15803d; --warning: #f59e0b; --danger: #b91c1c; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f4f8; padding: 15px; }
-        .container { max-width: 1000px; margin: auto; }
-        
-        .upload-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 2px dashed var(--primary); text-align: center; margin-bottom: 20px; }
-        .btn-main { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-top: 15px; }
-        
-        .card { background: white; padding: 20px; margin-top: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-left: 10px solid var(--primary); position: relative; }
-        .card.audiencia { border-left-color: var(--warning); }
-        
-        .col-info { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px; }
-        label { display: block; font-weight: bold; font-size: 0.75em; color: #64748b; text-transform: uppercase; margin-bottom: 5px; }
-        input, textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; background: #fdfdfd; }
-        
-        .btn-group { display: flex; gap: 8px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #f1f5f9; }
-        .btn-act { flex: 1; padding: 10px; border-radius: 6px; border: none; color: white; font-weight: bold; cursor: pointer; font-size: 12px; transition: 0.2s; }
-        
-        #status { display: none; color: var(--primary); font-weight: bold; margin: 10px 0; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.5; } }
+        :root { --pje-blue: #0078aa; --card-bg: #ffffff; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f7f9; padding: 20px; }
+        .container { max-width: 1100px; margin: auto; }
+        .header-app { background: var(--pje-blue); color: white; padding: 15px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
+        .upload-area { background: white; padding: 20px; border: 2px dashed #ccc; text-align: center; border-radius: 0 0 8px 8px; margin-bottom: 20px; }
+        .card-mandado { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 6px solid var(--pje-blue); }
+        .grid-campos { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px; }
+        label { font-size: 11px; font-weight: bold; color: #666; text-transform: uppercase; }
+        input, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 4px; font-size: 13px; }
+        .btn-maps { background: #4285F4; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="upload-card">
-        <h2 style="color: var(--primary); margin: 0 0 15px 0;">🏛️ Central de Mandados TJPE</h2>
-        <p style="font-size: 0.9em; color: #64748b;">Suporta Captura de 5 Colunas (Links | Comunicação | Audiência | Endereço | Anexos)</p>
-        <input type="file" id="fileInput" accept="image/*, .html, .htm">
-        <div id="status">⌛ Mapeando colunas e identificando destinatários...</div>
-        <button class="btn-main" onclick="processar()">🚀 Importar Dados</button>
+    <div class="header-app">
+        <span>🏛️ TRIAGEM OFICIAL DE JUSTIÇA - PJe TJPE</span>
+        <small id="contador">0 Mandados</small>
+    </div>
+    
+    <div class="upload-area">
+        <input type="file" id="arquivoPje" accept=".html,.htm" onchange="processarArquivo()">
+        <p>Arraste o arquivo .html do seu Painel do Oficial para cá</p>
     </div>
 
-    <div id="lista"></div>
+    <div id="listaMandados"></div>
 </div>
 
 <script>
-    let banco = [];
+    function processarArquivo() {
+        const file = document.getElementById('arquivoPje').files[0];
+        if (!file) return;
 
-    async function processar() {
-        const file = document.getElementById('fileInput').files[0];
-        if (!file) return alert("Selecione o arquivo.");
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(e.target.result, "text/html");
+            
+            // Localiza a tabela de processos do PJe
+            const linhasTabela = doc.querySelectorAll("tr[id^='j_id153:listagem:']");
+            const mandados = [];
 
-        document.getElementById('status').style.display = "block";
-        const ext = file.name.split('.').pop().toLowerCase();
-
-        if (ext.includes('htm')) {
-            const reader = new FileReader();
-            reader.onload = (e) => { extrair(e.target.result); document.getElementById('status').style.display = "none"; };
-            reader.readAsText(file);
-        } else {
-            try {
-                const { data: { text } } = await Tesseract.recognize(file, 'por');
-                extrair(text);
-            } catch (err) { alert("Erro no OCR."); }
-            finally { document.getElementById('status').style.display = "none"; }
-        }
-    }
-
-    function extrair(raw) {
-        // Limpeza para HTML
-        const texto = raw.replace(/<[^>]*>/g, '\n');
-        const linhas = texto.split('\n').map(l => l.trim()).filter(l => l !== "");
-        const regexProc = /\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g;
-
-        linhas.forEach((linha, idx) => {
-            const procMatch = linha.match(regexProc);
-            if (procMatch) {
-                const numProc = procMatch[0];
-
-                // LÓGICA DE COLUNAS (Horizontal)
-                // O Endereço está na 4ª coluna da linha onde está o processo
-                const partesLinha = linha.split(/\s{2,}|\t|\|/);
-                let endereco = partesLinha.length >= 4 ? partesLinha[3].trim() : "Verificar na 4ª Coluna";
+            linhasTabela.forEach(linha => {
+                const colunas = linha.querySelectorAll("td");
                 
-                // Se a 4ª coluna estiver vazia na linha do processo, tenta buscar o texto à direita do número
-                if (endereco === "" || endereco.length < 5) {
-                    endereco = linha.split(numProc)[1]?.trim() || "Não detectado";
+                if (colunas.length >= 5) {
+                    // 1. Processo (Coluna 2 - Atos de Comunicação contém o número)
+                    const textoAtos = colunas[1].innerText;
+                    const numProcesso = textoAtos.match(/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/)?.[0] || "N/D";
+                    
+                    // 2. Destinatário (Geralmente na 4ª linha de texto dentro da coluna 2)
+                    const linhasTexto = textoAtos.split('\n').map(t => t.trim()).filter(t => t !== "");
+                    const destinatario = linhasTexto[3] || linhasTexto[0]; // Tenta a 4ª linha conforme regra
+
+                    // 3. Próxima Audiência (Coluna 3)
+                    const audiencia = colunas[2].innerText.trim();
+
+                    // 4. Endereço (Coluna 4)
+                    const endereco = colunas[3].innerText.trim();
+
+                    mandados.push({ numProcesso, destinatario, audiencia, endereco });
                 }
+            });
 
-                // LÓGICA DE DESTINATÁRIO (Vertical)
-                // Conforme solicitado: Destinatário está na 4ª linha ABAIXO do número do processo
-                let destinatario = linhas[idx + 4] || "Destinatário não localizado";
-
-                // Captura de Audiência (3ª Coluna)
-                let audiencia = partesLinha.length >= 3 ? partesLinha[2].trim() : "";
-
-                if (!banco.find(m => m.processo === numProc)) {
-                    banco.push({
-                        processo: numProc,
-                        nome: destinatario,
-                        endereco: endereco,
-                        audiencia: audiencia,
-                        certidao: ""
-                    });
-                }
-            }
-        });
-        render();
+            renderizar(mandados);
+        };
+        reader.readAsText(file);
     }
 
-    function render() {
-        const cont = document.getElementById('lista');
-        cont.innerHTML = "";
+    function renderizar(lista) {
+        const container = document.getElementById('listaMandados');
+        const contDisp = document.getElementById('contador');
+        container.innerHTML = "";
+        contDisp.innerText = `${lista.length} Mandados Identificados`;
 
-        banco.forEach((m, i) => {
-            cont.innerHTML += `
-                <div class="card ${m.audiencia ? 'audiencia' : ''}">
-                    <div class="col-info">
-                        <div>
-                            <label>⚖️ Processo</label>
-                            <input value="${m.processo}" readonly>
-                        </div>
-                        <div>
-                            <label>📅 Próxima Audiência (3ª Col)</label>
-                            <input value="${m.audiencia}" onchange="up(${i}, 'audiencia', this.value)">
-                        </div>
+        lista.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'card-mandado';
+            card.innerHTML = `
+                <div class="grid-campos">
+                    <div>
+                        <label>Processo</label>
+                        <input type="text" value="${m.numProcesso}" readonly>
                     </div>
-
-                    <label>👤 Destinatário (4ª Linha abaixo do processo)</label>
-                    <input value="${m.nome}" onchange="up(${i}, 'nome', this.value)">
-
-                    <label>📍 Endereço (4ª Coluna)</label>
-                    <input value="${m.endereco}" onchange="up(${i}, 'endereco', this.value)">
-
-                    <label>📝 Minuta da Certidão</label>
-                    <textarea id="voc-${i}" rows="3" onchange="up(${i}, 'certidao', this.value)">${m.certidao}</textarea>
-
-                    <div class="btn-group">
-                        <button class="btn-act" style="background:#4285F4" onclick="window.open('https://www.google.com.br/maps/dir//${encodeURIComponent(m.endereco)}')">🗺️ Rota</button>
-                        <button class="btn-act" style="background:#ea4335" onclick="voz(${i})">🎤 Ditar</button>
-                        <button class="btn-act" style="background:#25d366" onclick="zap('${m.nome}')">💬 Zap</button>
-                        <button class="btn-act" style="background:#64748b" onclick="del(${i})">🗑️</button>
+                    <div>
+                        <label>Destinatário</label>
+                        <input type="text" value="${m.destinatario}">
+                    </div>
+                    <div>
+                        <label>Próxima Audiência</label>
+                        <input type="text" value="${m.audiencia || 'Não agendada'}">
                     </div>
                 </div>
+                <div style="margin-top:10px">
+                    <label>📍 Endereço de Diligência</label>
+                    <input type="text" value="${m.endereco}">
+                </div>
+                <button class="btn-maps" onclick="window.open('https://www.google.com.br/maps/search/${encodeURIComponent(m.endereco)}')">
+                    ABRIR NO GOOGLE MAPS
+                </button>
             `;
+            container.appendChild(card);
         });
-    }
-
-    function up(i, f, v) { banco[i][f] = v; localStorage.setItem('ofj_data', JSON.stringify(banco)); }
-    function del(i) { banco.splice(i, 1); render(); }
-    function zap(n) { window.open(`https://wa.me/?text=${encodeURIComponent('Olá ' + n + ', sou Oficial de Justiça...')}`); }
-    
-    function voz(i) {
-        const S = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if(!S) return alert("Erro no microfone");
-        const r = new S(); r.lang = 'pt-BR';
-        r.onresult = (e) => { 
-            const t = e.results[0][0].transcript;
-            const a = document.getElementById(`voc-${i}`);
-            a.value += (a.value ? " " : "") + t;
-            up(i, 'certidao', a.value);
-        };
-        r.start();
     }
 </script>
 
