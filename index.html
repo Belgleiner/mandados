@@ -2,22 +2,22 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Central de Mandados - Painel Institucional</title>
+<title>Central de Mandados - TJPE</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-body{font-family:Arial;background:#f1f5f9;padding:20px;}
+body{font-family:Arial;background:#eef2f7;padding:20px;}
 h2{color:#1e3a8a;}
 button{padding:8px;margin:4px;background:#1e40af;color:white;border:none;border-radius:6px;}
-.card{background:white;padding:15px;margin-top:10px;border-radius:8px;box-shadow:0 3px 8px rgba(0,0,0,0.1);}
-.vencido{border-left:6px solid red;}
-.proximo{border-left:6px solid orange;}
-.regular{border-left:6px solid green;}
-input{width:100%;margin-top:4px;}
-textarea{width:100%;margin-top:5px;}
+.card{background:white;padding:15px;margin-top:10px;border-radius:8px;
+box-shadow:0 3px 8px rgba(0,0,0,0.1);}
+.vencido{border-left:6px solid #b91c1c;}
+.proximo{border-left:6px solid #f59e0b;}
+.regular{border-left:6px solid #15803d;}
+input{width:100%;margin:2px 0;}
 .dashboard{background:white;padding:15px;margin-top:20px;border-radius:8px;}
 </style>
 </head>
@@ -30,11 +30,9 @@ textarea{width:100%;margin-top:5px;}
 <br>
 <button onclick="processarImagem()">Processar Print</button>
 <button onclick="exportarExcel()">Exportar Excel</button>
-<button onclick="gerarPDF()">Relatório PDF</button>
-<button onclick="gerarCertidao()">Gerar Certidão</button>
 
 <div id="resultado"></div>
-<div class="dashboard" id="dashboard"></div>
+<div id="dashboard" class="dashboard"></div>
 
 <audio id="alertaSom">
 <source src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" type="audio/mpeg">
@@ -44,27 +42,29 @@ textarea{width:100%;margin-top:5px;}
 
 let bancoMandados = [];
 
-function atualizarDashboard(){
-    let total = bancoMandados.length;
-    let urg = bancoMandados.filter(m=>m.tipo==="URGENTE").length;
-    let prot = bancoMandados.filter(m=>m.tipo==="MEDIDA PROTETIVA").length;
-    let ord = bancoMandados.filter(m=>m.tipo==="ORDINÁRIO").length;
-    let venc = bancoMandados.filter(m=>m.status==="vencido").length;
+function salvarLocal(){
+    localStorage.setItem("mandadosTJPE", JSON.stringify(bancoMandados));
+}
 
-    document.getElementById("dashboard").innerHTML = `
-        <b>📊 Estatística Mensal</b><br>
-        Total: ${total} |
-        Ordinários: ${ord} |
-        Urgentes: ${urg} |
-        Medidas Protetivas: ${prot} |
-        Vencidos: ${venc}
-    `;
+function carregarLocal(){
+    const dados = localStorage.getItem("mandadosTJPE");
+    if(dados){
+        bancoMandados = JSON.parse(dados);
+        renderizar();
+    }
+}
+
+function identificarTipo(txt){
+    txt = txt.toUpperCase();
+    if(txt.includes("MEDIDA PROTETIVA")) return "MEDIDA PROTETIVA";
+    if(txt.includes("URGENTE")) return "URGENTE";
+    return "ORDINÁRIO";
 }
 
 function calcularPrazo(tipo, dataDist){
     let dias = tipo==="MEDIDA PROTETIVA"?2:tipo==="URGENTE"?5:20;
     let p = dataDist.split("/");
-    let data = new Date(p[2],p[1]-1,p[0]);
+    let data = new Date(p[2], p[1]-1, p[0]);
     data.setDate(data.getDate()+dias);
     return data;
 }
@@ -72,7 +72,131 @@ function calcularPrazo(tipo, dataDist){
 function classificarPrazo(dataFinal){
     let hoje=new Date();
     let diff=Math.ceil((dataFinal-hoje)/(1000*60*60*24));
-    if(diff<0)return "vencido";
+    if(diff<0) return "vencido";
+    if(diff<=2) return "proximo";
+    return "regular";
+}
+
+function processarTextoOCR(texto){
+
+    const processos = texto.match(/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g) || [];
+
+    processos.forEach(proc=>{
+
+        let bloco = texto.split(proc)[1] || texto;
+        let datas = bloco.match(/\d{2}\/\d{2}\/\d{4}/g)||[];
+        let dataDist = datas[0] || new Date().toLocaleDateString('pt-BR');
+
+        let tipo = identificarTipo(bloco);
+        let prazoObj = calcularPrazo(tipo,dataDist);
+        let status = classificarPrazo(prazoObj);
+
+        if(tipo==="MEDIDA PROTETIVA"){
+            document.getElementById("alertaSom").play();
+        }
+
+        bancoMandados.push({
+            processo:proc,
+            nome:"",
+            endereco:"",
+            tipo,
+            distribuicao:dataDist,
+            prazo:prazoObj.toLocaleDateString('pt-BR'),
+            status
+        });
+    });
+
+    salvarLocal();
+    renderizar();
+}
+
+function renderizar(){
+
+    const div = document.getElementById("resultado");
+    div.innerHTML="";
+
+    bancoMandados.forEach((m,index)=>{
+
+        div.innerHTML+=`
+        <div class="card ${m.status}">
+            Processo:<input value="${m.processo}" onchange="editar(${index},'processo',this.value)">
+            Nome:<input value="${m.nome}" onchange="editar(${index},'nome',this.value)">
+            Endereço:<input value="${m.endereco}" onchange="editar(${index},'endereco',this.value)">
+            Tipo:<input value="${m.tipo}" onchange="editar(${index},'tipo',this.value)">
+            Distribuição:<input value="${m.distribuicao}" onchange="editar(${index},'distribuicao',this.value)">
+            Prazo Final:<input value="${m.prazo}" readonly>
+            Status:<input value="${m.status}" readonly>
+            <button onclick="gerarCertidaoIndividual(${index})">Gerar Certidão</button>
+        </div>
+        `;
+    });
+
+    atualizarDashboard();
+}
+
+function editar(index,campo,valor){
+    bancoMandados[index][campo]=valor;
+    salvarLocal();
+}
+
+function atualizarDashboard(){
+    let total=bancoMandados.length;
+    let ord=bancoMandados.filter(m=>m.tipo==="ORDINÁRIO").length;
+    let urg=bancoMandados.filter(m=>m.tipo==="URGENTE").length;
+    let prot=bancoMandados.filter(m=>m.tipo==="MEDIDA PROTETIVA").length;
+    let venc=bancoMandados.filter(m=>m.status==="vencido").length;
+
+    document.getElementById("dashboard").innerHTML=`
+    <b>📊 Estatística Mensal</b><br>
+    Total: ${total} |
+    Ordinários: ${ord} |
+    Urgentes: ${urg} |
+    Medidas Protetivas: ${prot} |
+    Vencidos: ${venc}
+    `;
+}
+
+function gerarCertidaoIndividual(index){
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const m = bancoMandados[index];
+
+    doc.setFontSize(12);
+    doc.text("CERTIDÃO", 10, 20);
+    doc.text(`Processo: ${m.processo}`,10,35);
+    doc.text(`Destinatário: ${m.nome}`,10,45);
+    doc.text(`Endereço: ${m.endereco}`,10,55);
+    doc.text(`Tipo: ${m.tipo}`,10,65);
+    doc.text("Certifico que procedi às diligências necessárias, nos termos do mandado expedido.",10,80);
+    doc.text("O referido é verdade. Dou fé.",10,95);
+
+    doc.save(`certidao_${m.processo}.pdf`);
+}
+
+function exportarExcel(){
+    let ws=XLSX.utils.json_to_sheet(bancoMandados);
+    let wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Mandados");
+    XLSX.writeFile(wb,"controle_mandados_tjpe.xlsx");
+}
+
+function processarImagem(){
+    let file=document.getElementById("imagemInput").files[0];
+    if(!file){ alert("Selecione imagem."); return; }
+
+    Tesseract.recognize(file,'por')
+    .then(({data:{text}})=>{
+        processarTextoOCR(text);
+    });
+}
+
+carregarLocal();
+
+</script>
+
+</body>
+</html>    if(diff<0)return "vencido";
     if(diff<=2)return "proximo";
     return "regular";
 }
