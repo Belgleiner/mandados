@@ -3,154 +3,166 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel do Oficial de Justiça - TJPE (Precisão Avançada)</title>
+    <title>Painel OFJ - Precisão Geográfica e Nominal</title>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
-        :root { --primary: #1e3a8a; --success: #15803d; --warning: #f59e0b; --danger: #b91c1c; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f1f5f9; margin: 0; padding: 15px; }
-        .container { max-width: 1100px; margin: auto; }
-        .header-box { background: white; padding: 15px; border-radius: 8px; border-bottom: 4px solid var(--primary); margin-bottom: 15px; }
-        .upload-section { background: white; padding: 20px; border-radius: 12px; border: 2px dashed #1e3a8a; margin-bottom: 20px; text-align: center; }
-        .btn-process { background: var(--primary); color: white; width: 100%; padding: 15px; font-size: 18px; border: none; border-radius: 8px; cursor: pointer; }
-        .card { background: white; padding: 20px; margin-top: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-left: 12px solid #cbd5e1; }
-        .card.vencido { border-left-color: var(--danger); }
-        .card.regular { border-left-color: var(--success); }
-        label { display: block; font-weight: bold; margin-top: 10px; font-size: 0.85em; color: #475569; }
-        input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
-        .action-bar { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; }
-        button.action { padding: 8px 12px; border-radius: 5px; border: none; color: white; cursor: pointer; font-weight: bold; }
-        .loading { display: none; background: #dbeafe; padding: 15px; border-radius: 8px; color: var(--primary); font-weight: bold; margin-bottom: 10px; }
+        :root { --primary: #1e3a8a; --success: #15803d; --danger: #b91c1c; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f8fafc; padding: 15px; }
+        .container { max-width: 950px; margin: auto; }
+        .upload-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border: 2px dashed var(--primary); }
+        .btn-main { background: var(--primary); color: white; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; transition: 0.3s; }
+        .btn-main:hover { background: #172554; }
+        
+        .card { background: white; padding: 20px; margin-top: 20px; border-radius: 10px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-left: 10px solid var(--primary); }
+        .card.urgente { border-left-color: var(--danger); }
+        
+        label { display: block; font-weight: bold; margin-top: 12px; color: #475569; font-size: 0.85em; text-transform: uppercase; }
+        input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; background: #fdfdfd; }
+        
+        .action-group { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-action { flex: 1; padding: 10px; border-radius: 5px; border: none; color: white; font-weight: bold; cursor: pointer; font-size: 12px; }
+        
+        #status { display: none; background: #dbeafe; padding: 10px; border-radius: 5px; color: #1e40af; font-weight: bold; margin: 10px 0; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header-box">
-        <h3>🏛️ Central de Mandados TJPE - Precisão de Colunas</h3>
+    <div class="upload-card">
+        <h2 style="color: var(--primary); margin-top: 0;">🏛️ Triagem de Mandados TJPE</h2>
+        <input type="file" id="inputArquivo" accept="image/*, .html, .htm" style="margin-bottom: 20px;">
+        <div id="status">⌛ Analisando estrutura de colunas e linhas...</div>
+        <button class="btn-main" onclick="iniciarProcessamento()">🚀 Processar Documento</button>
     </div>
 
-    <div class="upload-section">
-        <input type="file" id="arquivoInput" accept="image/*, .html, .htm">
-        <p id="loadingStatus" class="loading">⌛ Processando texto e acentuação... Aguarde.</p>
-        <button class="btn-process" onclick="processarArquivo()">🚀 Ler Mandados (Imagem ou HTML)</button>
-    </div>
-
-    <div id="resultado"></div>
+    <div id="listaMandados"></div>
 </div>
 
 <script>
     let bancoMandados = [];
 
-    async function processarArquivo() {
-        const file = document.getElementById("arquivoInput").files[0];
-        if(!file) return alert("Selecione um arquivo!");
-        
-        document.getElementById("loadingStatus").style.display = "block";
+    async function iniciarProcessamento() {
+        const file = document.getElementById('inputArquivo').files[0];
+        if (!file) return alert("Selecione um arquivo.");
+
+        document.getElementById('status').style.display = "block";
         const extensao = file.name.split('.').pop().toLowerCase();
 
-        if (extensao === 'html' || extensao === 'htm') {
+        if (extensao.includes('htm')) {
             const reader = new FileReader();
-            reader.onload = (e) => {
-                analisarTexto(e.target.result, true); // Processa como HTML
-                document.getElementById("loadingStatus").style.display = "none";
+            reader.onload = (e) => { 
+                processarTexto(e.target.result); 
+                document.getElementById('status').style.display = "none";
             };
             reader.readAsText(file);
         } else {
-            // OCR configurado para Português (preserva acentos)
             try {
-                const { data: { text } } = await Tesseract.recognize(file, 'por', {
-                    logger: m => console.log(m)
-                });
-                analisarTexto(text, false);
-            } catch (e) { alert("Erro ao processar imagem."); }
-            finally { document.getElementById("loadingStatus").style.display = "none"; }
+                // OCR configurado para preservar acentuação em português
+                const { data: { text } } = await Tesseract.recognize(file, 'por');
+                processarTexto(text);
+            } catch (err) { alert("Erro ao ler imagem."); }
+            finally { document.getElementById('status').style.display = "none"; }
         }
     }
 
-    function analisarTexto(conteudo, isHtml) {
-        let textoPuro = isHtml ? conteudo.replace(/<[^>]*>/g, ' ') : conteudo;
+    function processarTexto(textoBruto) {
+        // Remove tags HTML se o arquivo for .html para não sujar a busca
+        const textoLimpo = textoBruto.replace(/<[^>]*>/g, '\n');
+        const linhas = textoLimpo.split('\n').map(l => l.trim()).filter(l => l !== "");
         
-        // Expressão para o Número do Processo (CNJ)
-        const regexProc = /\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g;
-        let processos = textoPuro.match(regexProc) || [];
+        const regexPje = /\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g;
+        
+        linhas.forEach((linha, index) => {
+            const match = linha.match(regexPje);
+            if (match) {
+                const nProcesso = match[0];
+                
+                // 1. ENDEREÇO: O que está à direita do número do processo na mesma linha
+                // Removemos o número do processo da linha para pegar o resto
+                let enderecoEncontrado = linha.replace(nProcesso, "").trim();
+                // Limpa símbolos comuns que sobram na captura (como traços ou pipes)
+                enderecoEncontrado = enderecoEncontrado.replace(/^[:\-\s|]+/, "");
 
-        processos.forEach(num => {
-            if(bancoMandados.find(m => m.processo === num)) return;
+                // 2. DESTINATÁRIO: O que está na 4ª linha abaixo do processo
+                // Verificamos se a linha existe no array
+                let destinatarioEncontrado = (linhas[index + 4]) ? linhas[index + 4] : "Confirme no documento";
 
-            // Divide o texto em linhas para localizar o que está "abaixo" ou na "coluna"
-            let linhas = textoPuro.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            let indexProc = linhas.findIndex(l => l.includes(num));
-            
-            // 1. Destinatário: Geralmente na linha imediatamente abaixo do processo
-            let destinatario = (linhas[indexProc + 1]) ? linhas[indexProc + 1] : "Não identificado";
-
-            // 2. Endereço: Simulação de captura da "4ª coluna"
-            // Se a linha for separada por espaços múltiplos ou abas, pegamos o 4º elemento
-            let endereco = "Não identificado";
-            let linhaDados = linhas[indexProc];
-            let colunas = linhaDados.split(/\s{2,}|\t|\|/); // Separa por 2+ espaços, tab ou pipe
-            
-            if(colunas.length >= 4) {
-                endereco = colunas[3].trim(); // Pega a 4ª coluna
-            } else if (linhas[indexProc + 2]) {
-                // Caso não seja tabular, tenta pegar 2 linhas abaixo
-                endereco = linhas[indexProc + 2];
+                // Evita duplicados
+                if(!bancoMandados.find(m => m.processo === nProcesso)) {
+                    bancoMandados.push({
+                        processo: nProcesso,
+                        nome: destinatarioEncontrado,
+                        endereco: enderecoEncontrado,
+                        urgente: textoBruto.toUpperCase().includes("PROTETIVA") || textoBruto.toUpperCase().includes("URGENTE"),
+                        certidao: ""
+                    });
+                }
             }
-
-            bancoMandados.push({
-                processo: num,
-                nome: destinatario,
-                endereco: endereco,
-                tipo: textoPuro.toUpperCase().includes("PROTETIVA") ? "MEDIDA PROTETIVA" : "ORDINÁRIO",
-                certidao: ""
-            });
         });
-        renderizar();
+        renderizarCards();
     }
 
-    function renderizar() {
-        const div = document.getElementById("resultado");
-        div.innerHTML = "";
+    function renderizarCards() {
+        const container = document.getElementById('listaMandados');
+        container.innerHTML = "";
+
         bancoMandados.forEach((m, i) => {
-            div.innerHTML += `
-                <div class="card ${m.tipo === 'ORDINÁRIO' ? 'regular' : 'vencido'}">
-                    <label>⚖️ Número do Processo:</label>
+            container.innerHTML += `
+                <div class="card ${m.urgente ? 'urgente' : ''}">
+                    <label>Nº Processo</label>
                     <input value="${m.processo}" readonly>
-                    
-                    <label>👤 Destinatário (Identificado abaixo do processo):</label>
-                    <input value="${m.nome}" onchange="editar(${i},'nome',this.value)">
-                    
-                    <label>📍 Endereço (Identificado na 4ª coluna):</label>
-                    <input value="${m.endereco}" onchange="editar(${i},'endereco',this.value)">
 
-                    <label>📝 Minuta da Certidão:</label>
-                    <textarea id="cert-${i}" rows="3" onchange="editar(${i},'certidao',this.value)">${m.certidao}</textarea>
+                    <label>📍 Endereço (Capturado à direita do processo)</label>
+                    <input value="${m.endereco}" onchange="atualizar(${i}, 'endereco', this.value)">
 
-                    <div class="action-bar">
-                        <button class="action" style="background:#4285F4" onclick="window.open('https://www.google.com.br/maps/dir//${encodeURIComponent(m.endereco)}')">📍 Rota</button>
-                        <button class="action" style="background:#ea4335" onclick="ditar(${i})">🎤 Ditar</button>
-                        <button class="action" style="background:#64748b" onclick="remover(${i})">🗑️ Excluir</button>
+                    <label>👤 Destinatário (Capturado 4 linhas abaixo)</label>
+                    <input value="${m.nome}" onchange="atualizar(${i}, 'nome', this.value)">
+
+                    <label>📝 Minuta da Certidão</label>
+                    <textarea id="cert-${i}" rows="3" placeholder="Dite ou digite aqui..." onchange="atualizar(${i}, 'certidao', this.value)">${m.certidao}</textarea>
+
+                    <div class="action-group">
+                        <button class="btn-action" style="background:#4285F4" onclick="abrirRota('${m.endereco}')">🗺️ Ver Rota</button>
+                        <button class="btn-action" style="background:#ea4335" onclick="ativarVoz(${i})">🎤 Ditar</button>
+                        <button class="btn-action" style="background:#64748b" onclick="excluir(${i})">🗑️ Remover</button>
                     </div>
-                </div>`;
+                </div>
+            `;
         });
     }
 
-    function ditar(index) {
-        const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if(!Speech) return alert("Navegador não suporta voz.");
-        const rec = new Speech();
-        rec.lang = 'pt-BR';
-        rec.start();
-        rec.onresult = (e) => {
-            document.getElementById(`cert-${index}`).value += e.results[0][0].transcript;
-        };
+    function atualizar(i, campo, valor) {
+        bancoMandados[i][campo] = valor;
+        localStorage.setItem("mandados_v7", JSON.stringify(bancoMandados));
     }
 
-    function editar(i, campo, val) { bancoMandados[i][campo] = val; localStorage.setItem("dadosMandadosV6", JSON.stringify(bancoMandados)); }
-    function remover(i) { bancoMandados.splice(i, 1); renderizar(); }
+    function excluir(i) {
+        if(confirm("Deseja excluir este registro?")) {
+            bancoMandados.splice(i, 1);
+            renderizarCards();
+        }
+    }
+
+    function abrirRota(end) {
+        if(!end || end.length < 5) return alert("Endereço insuficiente.");
+        window.open(`https://www.google.com.br/maps/dir//${encodeURIComponent(end)}`, '_blank');
+    }
+
+    function ativarVoz(i) {
+        const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        rec.lang = 'pt-BR';
+        rec.onresult = (e) => {
+            const texto = e.results[0][0].transcript;
+            const area = document.getElementById(`cert-${i}`);
+            area.value += (area.value ? " " : "") + texto;
+            atualizar(i, 'certidao', area.value);
+        };
+        rec.start();
+    }
 </script>
+
 </body>
 </html>
