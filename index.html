@@ -3,98 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Central de Mandados - TJPE</title>
+    <title>Painel do Oficial de Justiça - TJPE</title>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <style>
         :root {
-            --primary: #1e3a8a;
-            --success: #15803d;
-            --warning: #f59e0b;
-            --danger: #b91c1c;
+            --primary: #1e3a8a; --success: #15803d; --warning: #f59e0b;
+            --danger: #b91c1c; --neutral: #64748b; --whatsapp: #25d366;
         }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f4f8; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: auto; }
-        h2 { color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f1f5f9; margin: 0; padding: 15px; color: #1e293b; }
+        .container { max-width: 1100px; margin: auto; }
         
-        .upload-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; color: white; transition: 0.3s; margin-right: 10px; }
-        .btn-process { background: var(--primary); }
+        .header-box { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--primary); margin-bottom: 15px; background: white; padding: 10px 20px; border-radius: 8px; }
+        
+        .upload-section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        
+        button { padding: 10px 15px; cursor: pointer; border: none; border-radius: 6px; font-weight: 600; color: white; transition: 0.2s; font-size: 13px; }
+        .btn-process { background: var(--primary); width: 100%; margin-bottom: 10px; font-size: 16px; }
         .btn-excel { background: var(--success); }
+        .btn-map { background: #4285F4; }
+        .btn-voice { background: #ea4335; }
+        .btn-wa { background: var(--whatsapp); }
         
-        .dashboard { display: flex; gap: 15px; margin-bottom: 20px; }
-        .stat-card { flex: 1; background: white; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 15px; border-radius: 10px; text-align: center; border-top: 4px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         
-        .card { background: white; padding: 20px; margin-top: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: relative; }
+        .card { background: white; padding: 18px; margin-top: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); position: relative; }
         .card.vencido { border-left: 10px solid var(--danger); }
         .card.proximo { border-left: 10px solid var(--warning); }
         .card.regular { border-left: 10px solid var(--success); }
         
-        label { display: block; font-weight: bold; margin-top: 10px; font-size: 0.9em; color: #555; }
-        input { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        .loading { font-weight: bold; color: var(--primary); display: none; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 15px; font-size: 11px; font-weight: bold; margin-bottom: 8px; }
+        .badge-audiencia { background: #fee2e2; color: #991b1b; }
+
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        label { display: block; font-weight: 600; margin-top: 8px; font-size: 0.8em; color: #475569; }
+        input, textarea { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 5px; box-sizing: border-box; font-size: 13px; }
+        
+        .financial-row { background: #f8fafc; padding: 10px; border-radius: 8px; margin-top: 10px; display: flex; gap: 10px; align-items: center; }
+        .action-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+        
+        .loading { font-weight: bold; color: var(--primary); display: none; text-align: center; padding: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🏛️ Central de Mandados - Painel de Controle</h2>
-
-    <div class="upload-section">
-        <label>Selecione o Print do Sistema:</label><br>
-        <input type="file" id="imagemInput" accept="image/*"><br><br>
-        <button class="btn-process" onclick="processarImagem()">🚀 Processar Imagem (OCR)</button>
-        <button class="btn-excel" onclick="exportarExcel()">📥 Exportar Excel</button>
-        <p id="loadingStatus" class="loading">⌛ Analisando imagem... Aguarde.</p>
+    <div class="header-box">
+        <h3>🏛️ Central de Mandados Móvel</h3>
+        <button style="background:var(--neutral)" onclick="limparTudo()">🧹 Limpar Banco</button>
     </div>
 
-    <div id="dashboard" class="dashboard">
-        </div>
+    <div class="upload-section">
+        <input type="file" id="imagemInput" accept="image/*">
+        <button class="btn-process" onclick="processarImagem()">🚀 Processar Novo Mandado</button>
+        <button class="btn-excel" onclick="exportarExcel()">📥 Relatório Mensal / GRC (Excel)</button>
+        <p id="loadingStatus" class="loading">⌛ Inteligência Artificial lendo o mandado...</p>
+    </div>
 
+    <div id="dashboard" class="dashboard"></div>
     <div id="resultado"></div>
 </div>
 
-<audio id="alertaSom">
-    <source src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" type="audio/mpeg">
-</audio>
+<audio id="alertaSom"><source src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" type="audio/mpeg"></audio>
 
 <script>
     let bancoMandados = [];
 
-    // Carrega dados salvos anteriormente
     window.onload = () => {
-        const salvos = localStorage.getItem("dadosMandados");
-        if(salvos) {
-            bancoMandados = JSON.parse(salvos);
-            renderizar();
-        }
+        const salvos = localStorage.getItem("dadosMandadosV4");
+        if(salvos) { bancoMandados = JSON.parse(salvos); renderizar(); }
     };
 
     function salvar() {
-        localStorage.setItem("dadosMandados", JSON.stringify(bancoMandados));
+        localStorage.setItem("dadosMandadosV4", JSON.stringify(bancoMandados));
         atualizarDashboard();
     }
 
     async function processarImagem() {
         const file = document.getElementById("imagemInput").files[0];
-        if(!file) return alert("Selecione um arquivo!");
-
+        if(!file) return alert("Selecione a imagem do mandado!");
         document.getElementById("loadingStatus").style.display = "block";
 
         try {
             const { data: { text } } = await Tesseract.recognize(file, 'por');
-            extrairDados(text);
-        } catch (e) {
-            alert("Erro ao ler imagem.");
-        } finally {
-            document.getElementById("loadingStatus").style.display = "none";
-        }
+            extrairDadosAvancado(text);
+        } catch (e) { alert("Erro no processamento."); }
+        finally { document.getElementById("loadingStatus").style.display = "none"; }
     }
 
-    function extrairDados(texto) {
+    function extrairDadosAvancado(texto) {
         const regexProc = /\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g;
         const processos = texto.match(regexProc) || [];
 
@@ -102,27 +102,31 @@
             if(bancoMandados.find(m => m.processo === num)) return;
 
             let bloco = texto.split(num)[1] || "";
-            let tipo = "ORDINÁRIO";
-            if(texto.toUpperCase().includes("PROTETIVA")) {
-                tipo = "MEDIDA PROTETIVA";
-                document.getElementById("alertaSom").play();
-            } else if(texto.toUpperCase().includes("URGENTE")) {
-                tipo = "URGENTE";
-            }
-
-            let dataDist = (bloco.match(/\d{2}\/\d{2}\/\d{4}/) || [new Date().toLocaleDateString('pt-BR')])[0];
+            let datas = bloco.match(/\d{2}\/\d{2}\/\d{4}/g) || [];
             
+            // Lógica de Datas
+            let dataDist = datas.length > 1 ? datas[1] : (datas[0] || "");
+            let dataAud = (bloco.match(/(AUDIÊNCIA|DATA)[:\s]+(\d{2}\/\d{2}\/\d{4})/i) || [])[2] || "";
+
+            // Busca por Vara e Comarca (Captura comum em cabeçalhos de mandados)
+            let origem = (bloco.match(/(VARA|COMARCA)[:\s]+([^-\n]+)/i) || ["","","Vara não identificada"])[2].trim();
+
             bancoMandados.push({
                 processo: num,
-                nome: "",
-                endereco: "",
-                tipo: tipo,
-                distribuicao: dataDist,
-                status: "regular"
+                origem: origem,
+                nome: (bloco.match(/(DESTINATÁRIO|NOME|PARA)[:\s]+([A-ZÀ-Ú\s]{5,30})/i) || ["","",""])[2].trim(),
+                endereco: (bloco.match(/(ENDEREÇO|LOCAL)[:\s]+([^;.\n]+)/i) || ["","",""])[2].trim(),
+                whatsapp: (bloco.match(/(CELULAR|FONE|TEL|ZAP)[:\s]*(\d{10,11})/i) || ["","",""])[2],
+                tipo: texto.toUpperCase().includes("PROTETIVA") ? "MEDIDA PROTETIVA" : "ORDINÁRIO",
+                distr: dataDist,
+                audiencia: dataAud,
+                grc: "",
+                km: "",
+                certidao: ""
             });
+            if(texto.toUpperCase().includes("PROTETIVA")) document.getElementById("alertaSom").play();
         });
-        salvar();
-        renderizar();
+        salvar(); renderizar();
     }
 
     function renderizar() {
@@ -130,24 +134,70 @@
         div.innerHTML = "";
 
         bancoMandados.forEach((m, i) => {
-            // Lógica de prazo simples
-            let statusClasse = m.tipo === "ORDINÁRIO" ? "regular" : "proximo";
-            if(m.tipo === "MEDIDA PROTETIVA") statusClasse = "vencido";
+            let statusClasse = m.tipo === "MEDIDA PROTETIVA" || m.audiencia ? "vencido" : "regular";
 
             div.innerHTML += `
                 <div class="card ${statusClasse}">
-                    <label>Processo:</label>
-                    <input type="text" value="${m.processo}" onchange="editar(${i}, 'processo', this.value)">
-                    <label>Nome do Destinatário:</label>
-                    <input type="text" value="${m.nome}" placeholder="Nome da parte..." onchange="editar(${i}, 'nome', this.value)">
+                    ${m.audiencia ? `<span class="badge badge-audiencia">📅 AUDIÊNCIA: ${m.audiencia}</span>` : ''}
+                    <span class="badge" style="background:#e2e8f0">${m.tipo}</span>
+                    
+                    <div class="grid-inputs">
+                        <div><label>Vara/Origem:</label><input value="${m.origem}" onchange="editar(${i},'origem',this.value)"></div>
+                        <div><label>Processo:</label><input value="${m.processo}" onchange="editar(${i},'processo',this.value)"></div>
+                    </div>
+
+                    <label>Destinatário:</label>
+                    <input value="${m.nome}" onchange="editar(${i},'nome',this.value)">
+                    
                     <label>Endereço:</label>
-                    <input type="text" value="${m.endereco}" placeholder="Rua, nº, Bairro..." onchange="editar(${i}, 'endereco', this.value)">
-                    <p><strong>Tipo:</strong> ${m.tipo} | <strong>Distr:</strong> ${m.distribuicao}</p>
-                    <button onclick="remover(${i})" style="background:#666; font-size:10px;">Excluir</button>
+                    <input id="end-${i}" value="${m.endereco}" onchange="editar(${i},'endereco',this.value)">
+
+                    <div class="financial-row">
+                        <span>💰 GRC R$:</span><input type="number" style="width:80px" value="${m.grc}" onchange="editar(${i},'grc',this.value)">
+                        <span>🚗 KM:</span><input type="number" style="width:80px" value="${m.km}" onchange="editar(${i},'km',this.value)">
+                    </div>
+
+                    <label>Minuta da Certidão (ou dite clicando no microfone):</label>
+                    <textarea id="cert-${i}" rows="3" onchange="editar(${i},'certidao',this.value)">${m.certidao}</textarea>
+
+                    <div class="action-bar">
+                        <button class="btn-map" onclick="abrirMapa('${m.endereco}')">📍 Ver no Mapa</button>
+                        <button class="btn-voice" onclick="ouvirVoz(${i})">🎤 Ditar Certidão</button>
+                        <button class="btn-wa" onclick="enviarWA('${m.whatsapp}', '${m.nome}')">💬 WhatsApp</button>
+                        <button style="background:var(--danger)" onclick="remover(${i})">🗑️ Excluir</button>
+                    </div>
                 </div>
             `;
         });
         atualizarDashboard();
+    }
+
+    // --- FUNCIONALIDADES NOVAS ---
+
+    function abrirMapa(end) {
+        if(!end) return alert("Endereço vazio!");
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(end)}`, '_blank');
+    }
+
+    function ouvirVoz(index) {
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'pt-BR';
+        recognition.start();
+        document.getElementById(`cert-${index}`).placeholder = "Ouvindo... fale agora.";
+
+        recognition.onresult = (event) => {
+            const texto = event.results[0][0].transcript;
+            const campo = document.getElementById(`cert-${index}`);
+            campo.value += (campo.value ? " " : "") + texto;
+            editar(index, 'certidao', campo.value);
+        };
+    }
+
+    function enviarWA(num, nome) {
+        let fone = num || prompt("Digite o número com DDD (apenas números):");
+        if(!fone) return;
+        let msg = encodeURIComponent(`Olá ${nome}, sou Oficial(a) de Justiça do TJPE. Gostaria de agendar uma diligência referente a um mandado judicial. Podemos conversar?`);
+        window.open(`https://wa.me/55${fone}?text=${msg}`, '_blank');
     }
 
     function editar(index, campo, valor) {
@@ -155,28 +205,27 @@
         salvar();
     }
 
-    function remover(index) {
-        if(confirm("Remover este registro?")) {
-            bancoMandados.splice(index, 1);
-            salvar();
-            renderizar();
-        }
-    }
+    function remover(index) { if(confirm("Remover?")) { bancoMandados.splice(index, 1); salvar(); renderizar(); } }
+
+    function limparTudo() { if(confirm("Apagar tudo?")) { bancoMandados = []; salvar(); renderizar(); } }
 
     function atualizarDashboard() {
         const total = bancoMandados.length;
-        const urgentes = bancoMandados.filter(m => m.tipo !== "ORDINÁRIO").length;
+        const totalGrc = bancoMandados.reduce((acc, m) => acc + (Number(m.grc) || 0), 0);
+        const totalKm = bancoMandados.reduce((acc, m) => acc + (Number(m.km) || 0), 0);
+        
         document.getElementById("dashboard").innerHTML = `
-            <div class="stat-card"><b>Total</b><br>${total}</div>
-            <div class="stat-card"><b>Urgentes</b><br>${urgentes}</div>
+            <div class="stat-card"><b>Atos</b><br>${total}</div>
+            <div class="stat-card"><b>Total GRC</b><br>R$ ${totalGrc.toFixed(2)}</div>
+            <div class="stat-card"><b>KM Rodado</b><br>${totalKm} km</div>
         `;
     }
 
     function exportarExcel() {
         const ws = XLSX.utils.json_to_sheet(bancoMandados);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Mandados");
-        XLSX.writeFile(wb, "Mandados_TJPE.xlsx");
+        XLSX.utils.book_append_sheet(wb, ws, "Mandados_Mensal");
+        XLSX.writeFile(wb, "Relatorio_Produtividade_OFJ.xlsx");
     }
 </script>
 
