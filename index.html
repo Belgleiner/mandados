@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Central Mobile – Parser PJe TJPE</title>
+<title>Leitor Completo Lista PJe - TJPE</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
@@ -11,225 +11,126 @@
 body{
 font-family: Arial, sans-serif;
 background:#f2f4f7;
-margin:0;
 padding:15px;
 }
-
-h2{ text-align:center; }
 
 .card{
 background:white;
 padding:15px;
 border-radius:10px;
-box-shadow:0 2px 5px rgba(0,0,0,0.1);
 margin-bottom:15px;
-}
-
-label{
-font-size:14px;
-font-weight:bold;
-}
-
-input, textarea, select, button{
-width:100%;
-padding:10px;
-margin:5px 0;
-font-size:15px;
+box-shadow:0 2px 5px rgba(0,0,0,0.1);
 }
 
 button{
+width:100%;
+padding:10px;
 background:#2c3e50;
 color:white;
 border:none;
 border-radius:6px;
 }
 
-.sigilo{
-background:#ffe6f0;
-border-left:6px solid #c0392b;
-}
-
-.alerta{
-color:red;
-font-weight:bold;
-}
+small{ color:gray; }
 </style>
 </head>
 
 <body>
 
-<h2>Central Mobile - Oficial de Justiça</h2>
+<h2>Leitor Completo - Lista do Painel PJe</h2>
 
 <div class="card">
-<b>📌 Instruções:</b><br>
-• Copie toda a linha do painel do PJe (ou abra o detalhe do mandado e copie tudo).<br>
-• Cole abaixo e clique em <b>Extrair Dados</b>.<br>
-• Também é possível importar print para OCR.
-</div>
-
-<div class="card">
-<label>Colar texto do PJe</label>
-<textarea id="textoPJE" rows="6"></textarea>
-<button onclick="extrairTexto()">Extrair Dados</button>
-</div>
-
-<div class="card">
-<label>Importar print (OCR)</label>
 <input type="file" accept="image/*" onchange="lerImagem(event)">
-<div id="statusOCR"></div>
+<div id="status"></div>
 </div>
 
-<div class="card">
-
-<label>Número do Processo</label>
-<input type="text" id="processo">
-
-<label>Destinatário</label>
-<input type="text" id="destinatario">
-
-<label>Endereço</label>
-<input type="text" id="endereco">
-
-<label>Data de Distribuição</label>
-<input type="date" id="distribuicao">
-
-<label>Data da Audiência</label>
-<input type="date" id="audiencia">
-
-<label>Vara</label>
-<input type="text" id="vara">
-
-<label>Status</label>
-<select id="status">
-<option>Pendente</option>
-<option>Cumprido</option>
-<option>Negativo</option>
-<option>Positivo</option>
-</select>
-
-<label>Sigilo</label>
-<select id="sigilo">
-<option value="Nao">Sem Sigilo</option>
-<option value="Sim">Violência Doméstica (Sigiloso)</option>
-</select>
-
-<button onclick="add()">Salvar Mandado</button>
-
-</div>
-
-<div id="lista"></div>
+<div id="resultado"></div>
 
 <script>
 
-let dados = JSON.parse(localStorage.getItem("mandadosTJPE")) || [];
-
-function converterData(dataBR){
-let partes = dataBR.split("/");
-return partes[2]+"-"+partes[1]+"-"+partes[0];
-}
-
-function extrairTexto(){
-
-let texto = document.getElementById("textoPJE").value;
-
-/* Processo */
-let proc = texto.match(/\d{7}-\d{2}\.\d{4}\.\d{1}\.\d{2}\.\d{4}/);
-if(proc) processo.value = proc[0];
-
-/* Destinatário */
-let dest = texto.match(/Destinat[aá]rio[:\s]*(.*)/i);
-if(dest) destinatario.value = dest[1].split("\n")[0].trim();
-
-/* Endereço */
-let end = texto.match(/Endere[cç]o[:\s]*(.*)/i);
-if(end) endereco.value = end[1].split("\n")[0].trim();
-
-/* Vara */
-let varaMatch = texto.match(/Vara[:\s]*(.*)/i);
-if(varaMatch) vara.value = varaMatch[1].split("\n")[0].trim();
-
-/* Data Distribuição */
-let dist = texto.match(/Distribui[cç][aã]o[:\s]*(\d{2}\/\d{2}\/\d{4})/i);
-if(dist) distribuicao.value = converterData(dist[1]);
-
-/* Audiência */
-let aud = texto.match(/Audi[eê]ncia[:\s]*(\d{2}\/\d{2}\/\d{4})/i);
-if(aud) audiencia.value = converterData(aud[1]);
-
-}
-
 function lerImagem(event){
 let file = event.target.files[0];
-statusOCR.innerText="Lendo imagem...";
+status.innerText = "Executando OCR...";
 
 Tesseract.recognize(file,'por').then(({ data: { text } })=>{
-textoPJE.value = text;
-statusOCR.innerText="Texto extraído. Clique em Extrair Dados.";
+status.innerText = "OCR concluído. Extraindo todos os mandados...";
+processarTexto(text);
 });
 }
 
-function prazo(data){
-if(!data) return "-";
-let d = new Date(data);
-d.setDate(d.getDate()+20);
-let hoje = new Date();
-return Math.ceil((d-hoje)/(1000*60*60*24));
+function processarTexto(texto){
+
+resultado.innerHTML = "";
+
+let linhas = texto.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+
+let mandados = [];
+let atual = {};
+
+for(let i=0; i<linhas.length; i++){
+
+let linha = linhas[i];
+
+/* Identifica Vara */
+if(linha.match(/^\d+ª?\s*Vara/i)){
+atual.vara = linha;
 }
 
-function salvar(){
-localStorage.setItem("mandadosTJPE", JSON.stringify(dados));
+/* Destinatário */
+if(linha.match(/Destinat[aá]rio/)){
+let nome = linha.replace(/Destinat[aá]rio\(s\)?/i,"").trim();
+atual.destinatario = nome;
 }
 
-function add(){
-
-let m = {
-processo: processo.value,
-destinatario: destinatario.value,
-endereco: endereco.value,
-distribuicao: distribuicao.value,
-audiencia: audiencia.value,
-vara: vara.value,
-status: status.value,
-sigilo: sigilo.value
-};
-
-dados.push(m);
-salvar();
-render();
+/* Distribuição */
+if(linha.match(/Distribui[cç][aã]o/i)){
+let data = linha.match(/\d{2}\/\d{2}\/\d{4}/);
+if(data) atual.distribuicao = data[0];
 }
 
-function render(){
+/* Audiência (captura datas isoladas que não sejam distribuição) */
+if(linha.match(/\d{2}\/\d{2}\/\d{4}/) && !linha.match(/Distribui/)){
+if(!atual.audiencia){
+atual.audiencia = linha.match(/\d{2}\/\d{2}\/\d{4}/)[0];
+}
+}
 
-lista.innerHTML="";
+/* Endereço (linha com CEP) */
+if(linha.match(/CEP/i)){
+atual.endereco = linha;
+}
 
-dados.forEach(m=>{
+/* Se encontrou Distribuição, considera bloco fechado */
+if(linha.match(/Distribui[cç][aã]o/i)){
+mandados.push({...atual});
+atual = {};
+}
 
-let dias = prazo(m.distribuicao);
+}
+
+/* Renderiza todos */
+
+mandados.forEach((m, index)=>{
+
 let div = document.createElement("div");
 div.className="card";
 
-if(m.sigilo=="Sim"){
-div.classList.add("sigilo");
-}
-
 div.innerHTML=`
-<b>${m.processo}</b><br>
-Destinatário: ${m.destinatario}<br>
-Endereço: ${m.endereco}<br>
-Vara: ${m.vara}<br>
-Distribuição: ${m.distribuicao || "-"}<br>
-Prazo: ${dias} dias ${dias<0?"<span class='alerta'>(VENCIDO)</span>":""}<br>
-Audiência: ${m.audiencia || "-"}<br>
-Status: ${m.status}
+<b>Mandado ${index+1}</b><br><br>
+<b>Vara:</b> ${m.vara || "-"}<br>
+<b>Destinatário:</b> ${m.destinatario || "-"}<br>
+<b>Endereço:</b> ${m.endereco || "-"}<br>
+<b>Distribuição:</b> ${m.distribuicao || "-"}<br>
+<b>Audiência:</b> ${m.audiencia || "-"}
 `;
 
-lista.appendChild(div);
+resultado.appendChild(div);
 
 });
 
-}
+status.innerText = mandados.length + " mandado(s) identificado(s).";
 
-render();
+}
 
 </script>
 
