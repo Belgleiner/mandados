@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Central Mobile - Oficial de Justiça TJPE</title>
+<title>Central Mobile – Parser PJe TJPE</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
@@ -15,9 +15,7 @@ margin:0;
 padding:15px;
 }
 
-h2{
-text-align:center;
-}
+h2{ text-align:center; }
 
 .card{
 background:white;
@@ -60,18 +58,18 @@ font-weight:bold;
 
 <body>
 
-<h2>Central Mobile - Mandados</h2>
+<h2>Central Mobile - Oficial de Justiça</h2>
 
 <div class="card">
-<b>📌 Como preencher:</b><br>
-• Cole abaixo o texto copiado do PJe OU<br>
-• Faça upload de um print do mandado.<br>
-O sistema tentará identificar automaticamente processo, parte e datas.
+<b>📌 Instruções:</b><br>
+• Copie toda a linha do painel do PJe (ou abra o detalhe do mandado e copie tudo).<br>
+• Cole abaixo e clique em <b>Extrair Dados</b>.<br>
+• Também é possível importar print para OCR.
 </div>
 
 <div class="card">
 <label>Colar texto do PJe</label>
-<textarea id="textoPJE" rows="4" placeholder="Cole aqui o conteúdo copiado do PJe..."></textarea>
+<textarea id="textoPJE" rows="6"></textarea>
 <button onclick="extrairTexto()">Extrair Dados</button>
 </div>
 
@@ -82,17 +80,24 @@ O sistema tentará identificar automaticamente processo, parte e datas.
 </div>
 
 <div class="card">
+
 <label>Número do Processo</label>
 <input type="text" id="processo">
 
-<label>Nome da Parte</label>
-<input type="text" id="parte">
+<label>Destinatário</label>
+<input type="text" id="destinatario">
 
-<label>Data de Recebimento</label>
-<input type="date" id="recebimento">
+<label>Endereço</label>
+<input type="text" id="endereco">
+
+<label>Data de Distribuição</label>
+<input type="date" id="distribuicao">
 
 <label>Data da Audiência</label>
 <input type="date" id="audiencia">
+
+<label>Vara</label>
+<input type="text" id="vara">
 
 <label>Status</label>
 <select id="status">
@@ -109,96 +114,28 @@ O sistema tentará identificar automaticamente processo, parte e datas.
 </select>
 
 <button onclick="add()">Salvar Mandado</button>
+
 </div>
 
 <div id="lista"></div>
 
 <script>
 
-let dados = JSON.parse(localStorage.getItem("mandadosMobile")) || [];
-
-function prazo(data){
-if(!data) return "-";
-let d = new Date(data);
-d.setDate(d.getDate()+20);
-let hoje = new Date();
-return Math.ceil((d-hoje)/(1000*60*60*24));
-}
-
-function salvar(){
-localStorage.setItem("mandadosMobile", JSON.stringify(dados));
-}
-
-function extrairTexto(){
-let texto = document.getElementById("textoPJE").value;
-
-let proc = texto.match(/\d{7}-\d{2}\.\d{4}\.\d{1}\.\d{2}\.\d{4}/);
-if(proc) processo.value = proc[0];
-
-let data = texto.match(/\d{2}\/\d{2}\/\d{4}/);
-if(data) recebimento.value = converterData(data[0]);
-
-let nomeMatch = texto.match(/Requerente:(.*)/i) || texto.match(/Parte:(.*)/i);
-if(nomeMatch) parte.value = nomeMatch[1].trim();
-}
+let dados = JSON.parse(localStorage.getItem("mandadosTJPE")) || [];
 
 function converterData(dataBR){
 let partes = dataBR.split("/");
 return partes[2]+"-"+partes[1]+"-"+partes[0];
 }
 
-function lerImagem(event){
-let file = event.target.files[0];
-document.getElementById("statusOCR").innerText="Lendo imagem...";
+function extrairTexto(){
 
-Tesseract.recognize(file,'por').then(({ data: { text } })=>{
-document.getElementById("textoPJE").value = text;
-document.getElementById("statusOCR").innerText="Texto extraído. Clique em 'Extrair Dados'.";
-});
-}
+let texto = document.getElementById("textoPJE").value;
 
-function add(){
-let m = {
-processo: processo.value,
-parte: parte.value,
-recebimento: recebimento.value,
-audiencia: audiencia.value,
-status: status.value,
-sigilo: sigilo.value
-};
+/* Processo */
+let proc = texto.match(/\d{7}-\d{2}\.\d{4}\.\d{1}\.\d{2}\.\d{4}/);
+if(proc) processo.value = proc[0];
 
-dados.push(m);
-salvar();
-render();
-}
-
-function render(){
-lista.innerHTML="";
-dados.forEach(m=>{
-let dias = prazo(m.recebimento);
-let div = document.createElement("div");
-div.className="card";
-
-if(m.sigilo=="Sim"){
-div.classList.add("sigilo");
-}
-
-div.innerHTML=`
-<b>${m.processo}</b><br>
-Parte: ${m.parte}<br>
-Prazo: ${dias} dias ${dias<0?"<span class='alerta'>(VENCIDO)</span>":""}<br>
-Audiência: ${m.audiencia || "-"}<br>
-Status: ${m.status}<br>
-Sigilo: ${m.sigilo}
-`;
-
-lista.appendChild(div);
-});
-}
-
-render();
-
-</script>
-
-</body>
-</html>
+/* Destinatário */
+let dest = texto.match(/Destinat[aá]rio[:\s]*(.*)/i);
+if(dest) destinatario.value = dest[1].split("\n
